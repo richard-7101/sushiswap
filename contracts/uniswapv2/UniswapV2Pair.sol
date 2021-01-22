@@ -22,6 +22,11 @@ contract UniswapV2Pair is UniswapV2ERC20 {
     uint public constant MINIMUM_LIQUIDITY = 10**3;
     bytes4 private constant SELECTOR = bytes4(keccak256(bytes('transfer(address,uint256)')));
 
+    // Add some snapshot variables
+    uint112 public reserve0snapshot;    // snapshot of reserve0 at the beginning of last block with swapping
+    uint112 public reserve1snapshot;    // snapshot of reserve1 at the beginning of last block with swapping
+    uint public blockNumberLast;        // block number of the last block with swapping
+
     address public factory;
     address public token0;
     address public token1;
@@ -169,11 +174,23 @@ contract UniswapV2Pair is UniswapV2ERC20 {
         emit Burn(msg.sender, amount0, amount1, to);
     }
 
+    // record reserves before the first call per block
+    // this is equivalent to recording the price - the developer's choice
+    function _record_before_swap() private {
+        if (block.number > blockNumberLast) {
+            reserve0snapshot = reserve0;
+            reserve1snapshot = reserve1;
+            blockNumberLast = block.number;
+        }
+    }
+
     // this low-level function should be called from a contract which performs important safety checks
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external lock {
         require(amount0Out > 0 || amount1Out > 0, 'UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT');
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         require(amount0Out < _reserve0 && amount1Out < _reserve1, 'UniswapV2: INSUFFICIENT_LIQUIDITY');
+
+        _record_before_swap();  //make a snapshot of reserve0 and reserve1
 
         uint balance0;
         uint balance1;
